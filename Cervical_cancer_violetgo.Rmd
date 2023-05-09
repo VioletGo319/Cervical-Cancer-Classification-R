@@ -1,0 +1,841 @@
+---
+title: "Cervical_cancer_violetgo"
+author: "Xinyu Wang"
+date: "2023-05-03"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1 Data preprocessing:
+### Packages
+```{r}
+library(ggplot2)
+library(dplyr)
+library(Boruta)
+library(DataExplorer)
+library(rmarkdown)
+library(flexdashboard)
+library(readr)
+library(GGally)
+```
+### Load Data
+```{r}
+cervical <- read.csv("risk_factors_cervical_cancer.csv")
+head(cervical,5)# first 5 rows of data
+```
+### Columns
+```{r}
+colnames(cervical) #names of variables
+```
+
+### data info
+```{r}
+glimpse(cervical)
+summary(cervical)
+```
+
+### delete characters like "?" since this can lead to char
+```{r}
+for(i in 1:ncol(cervical)) { 
+  for (j in 1:nrow(cervical)){
+  if (cervical[j,i] == "?"){
+  cervical[j , i] <- NA}
+  else next
+  }}
+head(cervical)
+```
+### to numeric
+```{r}
+# ro numeric
+cervical <- apply(cervical,2,as.numeric)
+cervical <- round(cervical,digits = 2)
+cervical <- as.data.frame(cervical)
+# some cols to factors
+cervical$Smokes <- as.factor(cervical$Smokes)
+cervical$Hormonal.Contraceptives <- as.factor(cervical$Hormonal.Contraceptives)
+cervical$IUD <- as.factor(cervical$IUD)
+
+cervical$STDs <- as.factor(cervical$STDs)
+cervical$STDs.condylomatosis <- as.factor(cervical$STDs.condylomatosis)
+cervical$STDs.vaginal.condylomatosis <- as.factor(cervical$STDs.vaginal.condylomatosis)
+cervical$STDs.vulvo.perineal.condylomatosis <- as.factor(cervical$STDs.condylomatosis)
+cervical$STDs.condylomatosis <- as.factor(cervical$STDs.vulvo.perineal.condylomatosis)
+cervical$STDs.syphilis  <- as.factor(cervical$STDs.syphilis)
+cervical$STDs.pelvic.inflammatory.disease <- as.factor(cervical$STDs.pelvic.inflammatory.disease)
+cervical$STDs.genital.herpes <- as.factor(cervical$STDs.genital.herpes)
+cervical$STDs.molluscum.contagiosum <- as.factor(cervical$STDs.molluscum.contagiosum)
+cervical$STDs.AIDS <- as.factor(cervical$STDs.AIDS)
+cervical$STDs.HIV <- as.factor(cervical$STDs.HIV)
+cervical$STDs.Hepatitis.B <- as.factor(cervical$STDs.Hepatitis.B)
+cervical$STDs.HPV <- as.factor(cervical$STDs.HPV)
+# Dx changed as bool
+cervical$Dx.Cancer <- as.factor(cervical$Dx.Cancer)
+cervical$Dx.CIN <- as.factor(cervical$Dx.CIN)
+cervical$Dx.HPV <- as.factor(cervical$Dx)
+cervical$Hinselmann <- as.factor(cervical$Hinselmann)
+cervical$Schiller <- as.factor(cervical$Schiller)
+cervical$Citology <- as.factor(cervical$Citology)
+cervical$Biopsy <- as.factor(cervical$Biopsy)
+head(cervical,5)
+```
+### missing values
+```{r}
+# delete if too much missing values and leave it as it is if not
+na_prop <- colMeans(is.na(cervical))
+cervical <- cervical[,na_prop <= 0.8]
+cervical_storage <- cervical
+cervical_withNA <- cervical
+cervical_withMean <- cervical
+```
+
+```{r}
+#filling the value NA
+for (col_name in names(cervical_withMean)) {
+  # if it
+  if (is.numeric(cervical_withMean[[col_name]])) {
+    mean_value <- mean(cervical_withMean[[col_name]], na.rm = TRUE)
+    cervical_withMean[[col_name]][is.na(cervical_withMean[[col_name]])] <- mean_value
+  }
+  # if col is factor, then use random sampling
+  else if (is.factor(cervical_withMean[[col_name]])) {
+    set.seed(42) 
+    cervical_withMean[[col_name]][is.na(cervical_withMean[[col_name]])] <- sample(cervical_withMean[[col_name]][!is.na(cervical_withMean[[col_name]])], 
+                                                     sum(is.na(cervical_withMean[[col_name]])), 
+                                                     replace = TRUE)
+  }
+}  
+```
+
+```{r}
+summary(cervical_withMean)
+```
+
+### standardization
+```{r}
+# Remove columns with all values equal to zero before standardization
+cervical_without_zero_cols <- cervical_withMean[, !colSums(cervical_withMean == 0, na.rm = TRUE) == nrow(cervical_withMean)]
+
+# Standardize the numeric columns
+for (col_name in names(cervical_without_zero_cols)) {
+  if (is.numeric(cervical_without_zero_cols[[col_name]])) {
+    min_value <- min(cervical_without_zero_cols[[col_name]], na.rm = TRUE)
+    max_value <- max(cervical_without_zero_cols[[col_name]], na.rm = TRUE)
+    cervical_without_zero_cols[[col_name]] <- (cervical_without_zero_cols[[col_name]] - min_value) / (max_value - min_value)
+  }
+}
+
+# Update the dataset
+cervical_std <- cervical_without_zero_cols
+
+# Display the first few rows of the standardized dataset
+head(cervical_std)
+
+```
+
+## 2 EDA 
+```{r}
+library(ggtext)
+
+prop_NA <- function(x) { mean(is.na(x)) }
+missdata <- sapply(cervical, prop_NA)
+missdata <- data.frame(variable = names(missdata), prop_NA = missdata)
+missdata <- missdata[order(missdata$prop_NA, decreasing = TRUE), ]
+
+ggplot(missdata, aes(x = variable, y = prop_NA, fill = variable)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) + 
+  scale_fill_viridis_d(guide = FALSE) +
+  labs(x = "Variable", y = "Proportion of Missing Values", 
+       title = "Proportion of Missing Values for Each Variable in Cervical Cancer Risk Dataset") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+plot_str(cervical)
+plot_bar(cervical)
+plot_qq(cervical)
+
+```
+
+## 3 Feature Selection
+
+### Define the target response
+```{r}
+Cervical <- cervical_std
+Dx_dt <- Cervical[,c("Hinselmann","Schiller","Citology","Biopsy")]
+Cervical$Outcome <- apply(Dx_dt, 1, FUN = function(x) {return(sum(as.numeric(x)))})
+```
+
+### Proportion of the Outcome with not 0 and 0
+```{r}
+# Convert the "Outcome" column to numeric data type
+Cervical$Outcome <- as.numeric(Cervical$Outcome)
+Cervical$Outcome <- as.numeric(Cervical$Outcome)
+
+prop <- nrow(Cervical[Cervical$Outcome==0,])/nrow(Cervical[Cervical$Outcome>0,])
+cat("The ratio between control and case is", prop, "for the whole data suppose case when outcome is larger than 0.\n")
+```
+### Split into training and testing set
+```{r}
+Npop <- nrow(Cervical)
+test_ind <- sample(Npop, Npop/5)
+cervical_te <- Cervical[test_ind,]
+cervical_tr <- Cervical[-test_ind,]
+```
+
+### Downsampling for training set and test set(feature selection)
+## Downsampling for traing set
+```{r}
+# Load the necessary library
+library(dplyr)
+
+# Separate cases and controls
+cases <- cervical_tr[cervical_tr$Outcome != 0,]
+controls <- cervical_tr[cervical_tr$Outcome == 0,]
+
+# Function to downsample controls for different ratios
+downsample_controls <- function(ratio) {
+  n_controls <- nrow(cases) * ratio
+  return(sample_n(controls, n_controls))
+}
+
+# Perform downsampling
+controls_1_2 <- downsample_controls(2)
+controls_1_3 <- downsample_controls(3)
+controls_1_4 <- downsample_controls(4)
+controls_1_5 <- downsample_controls(5)
+
+# Combine cases and downsampled controls for each ratio
+cervical_tr_1_2 <- rbind(cases, controls_1_2)
+cervical_tr_1_3 <- rbind(cases, controls_1_3)
+cervical_tr_1_4 <- rbind(cases, controls_1_4)
+cervical_tr_1_5 <- rbind(cases, controls_1_5)
+
+# Shuffle the rows (if needed)
+cervical_tr_1_2 <- cervical_tr_1_2[sample(nrow(cervical_tr_1_2)),]
+cervical_tr_1_3 <- cervical_tr_1_3[sample(nrow(cervical_tr_1_3)),]
+cervical_tr_1_4 <- cervical_tr_1_4[sample(nrow(cervical_tr_1_4)),]
+cervical_tr_1_5 <- cervical_tr_1_5[sample(nrow(cervical_tr_1_5)),]
+#We choose cervical_tr_1_3 for model(feature) selection.
+```
+
+##Downsampling for test set
+```{r}
+# Separate cases and controls
+cases_te <- cervical_te[cervical_te$Outcome != 0,]
+controls_te <- cervical_te[cervical_te$Outcome == 0,]
+
+# Function to downsample controls for different ratios
+downsample_controls <- function(ratio) {
+  n_controls <- nrow(cases) * ratio
+  return(sample_n(controls, n_controls))
+}
+
+# Perform downsampling
+controls_1_2_te <- downsample_controls(2)
+controls_1_3_te <- downsample_controls(3)
+controls_1_4_te <- downsample_controls(4)
+controls_1_5_te <- downsample_controls(5)
+
+# Combine cases and downsampled controls for each ratio
+cervical_te_1_2 <- rbind(cases, controls_1_2)
+cervical_te_1_3 <- rbind(cases, controls_1_3)
+cervical_te_1_4 <- rbind(cases, controls_1_4)
+cervical_te_1_5 <- rbind(cases, controls_1_5)
+
+#  Shuffle the rows (if needed)
+cervical_te_1_2 <- cervical_te_1_2[sample(nrow(cervical_tr_1_2)),]
+cervical_te_1_3 <- cervical_te_1_3[sample(nrow(cervical_tr_1_3)),]
+cervical_te_1_4 <- cervical_te_1_4[sample(nrow(cervical_tr_1_4)),]
+cervical_te_1_5 <- cervical_te_1_5[sample(nrow(cervical_tr_1_5)),]
+#We choose cervical_tr_1_3 for model(feature) selection.
+```
+### Delete the columns with all zeros in cervical_tr_1_3
+```{r}
+# Remove columns with all zeros
+cervical_tr_1_2 <- cervical_tr_1_2[, colSums(cervical_tr_1_2 != 0) > 0]
+cervical_tr_1_3 <- cervical_tr_1_3[, colSums(cervical_tr_1_3 != 0) > 0]
+cervical_tr_1_4 <- cervical_tr_1_4[, colSums(cervical_tr_1_4 != 0) > 0]
+cervical_tr_1_5 <- cervical_tr_1_5[, colSums(cervical_tr_1_5 != 0) > 0]
+```
+### LASSO feature selection
+```{r}
+X_tr <- cervical_tr_1_4[,1:24]
+Y_tr <- cervical_tr_1_4[,"Outcome"]
+X_te <- cervical_te_1_4[,1:24]
+Y_te <- cervical_te_1_4[,"Outcome"]
+X_class <- data.frame(sapply(X_tr, class))
+```
+
+```{r}
+library(glmnet)
+# input X should be a matrix
+numeric_df <- X_tr[, sapply(X_tr, is.numeric)]
+numeric_mat <- as.matrix(numeric_df)
+factor_df <- sapply(X_tr[, sapply(X_tr, is.factor)], as.numeric)-1
+factor_mat <- as.matrix(factor_df)
+Xmat_tr <- cbind(numeric_mat, factor_mat)
+```
+
+
+```{r}
+numeric_df <- X_te[, sapply(X_te, is.numeric)]
+numeric_mat <- as.matrix(numeric_df)
+factor_df <- sapply(X_te[, sapply(X_te, is.factor)], as.numeric)-1
+factor_mat <- as.matrix(factor_df)
+Xmat_te <- cbind(numeric_mat, factor_mat)
+```
+
+
+```{r}
+lasso_fit <- glmnet(Xmat_tr, as.numeric(Y_tr), family = "gaussian", alpha = 1)
+
+```
+
+
+```{r}
+cv.out <- cv.glmnet(Xmat_tr, as.numeric(Y_tr), family = "gaussian")
+plot(cv.out)
+bestlam <- cv.out$lambda.min
+lasso_pred <- predict(lasso_fit , s = bestlam , newx = Xmat_te, type = "response")
+yhat <- ifelse(lasso_pred >1, 1, 0)
+table(yhat)
+conf.mat <- table(yhat, Y_te)
+accuracy <- sum(diag(conf.mat))/sum(conf.mat)
+accuracy
+print(bestlam)# best lambda roughly 0.03, 80 accuracy
+```
+
+#### Extract non-zero variables
+```{r}
+all_coef <- coef(lasso_fit, s = bestlam)
+nonzero_coef <- all_coef[all_coef[, 1] != 0, ]
+cat("Non-zero coefficients:\n")
+nonzero_coef
+```
+
+
+## 4 Model training
+
+### linear regression
+
+```{r}
+# Function to fit models for a given dataset
+linear_1_2 <- lm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_2)
+linear_1_3 <- lm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_3)
+linear_1_4 <- lm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_4)
+linear_1_5 <- lm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_5)
+
+```
+
+### predict
+```{r}
+linear_pred_1_2 <- predict(linear_1_2, cervical_te_1_2)
+linear_pred_1_3 <- predict(linear_1_3, cervical_te_1_3)
+linear_pred_1_4 <- predict(linear_1_4, cervical_te_1_4)
+linear_pred_1_5 <- predict(linear_1_5, cervical_te_1_5)
+```
+### MSE&MAE
+```{r}
+# Calculate MSE for each dataset
+mse_1_2 <- mean((cervical_te_1_2$Outcome - linear_pred_1_2)^2)
+mse_1_3 <- mean((cervical_te_1_3$Outcome - linear_pred_1_3)^2)
+mse_1_4 <- mean((cervical_te_1_4$Outcome - linear_pred_1_4)^2)
+mse_1_5 <- mean((cervical_te_1_5$Outcome - linear_pred_1_5)^2)
+#MAE
+mae_1_2 <- mean(abs(cervical_te_1_2$Outcome - linear_pred_1_2))
+mae_1_3 <- mean(abs(cervical_te_1_3$Outcome - linear_pred_1_3))
+mae_1_4 <- mean(abs(cervical_te_1_4$Outcome - linear_pred_1_4))
+mae_1_5 <- mean(abs(cervical_te_1_5$Outcome - linear_pred_1_5))
+```
+### plot MSE for each 
+```{r}
+# Create a vector with MSE values
+mse_values <- c(mse_1_2, mse_1_3, mse_1_4, mse_1_5)
+
+# Create a vector with dataset names
+datasets <- c("1:2", "1:3", "1:4", "1:5")
+
+# Create a barplot for MSE values
+barplot(mse_values, names.arg = datasets, xlab = "Datasets", ylab = "MSE", main = "MSE for Each Dataset", col = "skyblue")
+```
+### Do the same for random forest model
+
+```{r}
+# Fit random forest models
+library(randomForest)
+rf_1_2 <- randomForest(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_2,importance=TRUE)
+rf_1_3 <- randomForest(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_3,importance=TRUE)
+rf_1_4 <- randomForest(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_4,importance=TRUE)
+rf_1_5 <- randomForest(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_5,importance=TRUE)
+```
+
+
+```{r}
+# Make predictions
+rf_pred_1_2 <- predict(rf_1_2, cervical_te_1_2)
+rf_pred_1_3 <- predict(rf_1_3, cervical_te_1_3)
+rf_pred_1_4 <- predict(rf_1_4, cervical_te_1_4)
+rf_pred_1_5 <- predict(rf_1_5, cervical_te_1_5)
+
+# Calculate MSE
+mse_rf_1_2 <- mean((cervical_te_1_2$Outcome - rf_pred_1_2)^2)
+mse_rf_1_3 <- mean((cervical_te_1_3$Outcome - rf_pred_1_3)^2)
+mse_rf_1_4 <- mean((cervical_te_1_4$Outcome - rf_pred_1_4)^2)
+mse_rf_1_5 <- mean((cervical_te_1_5$Outcome - rf_pred_1_5)^2)
+
+#MAE
+mae_rf_1_2 <- mean(abs(cervical_te_1_2$Outcome - rf_pred_1_2))
+mae_rf_1_3 <- mean(abs(cervical_te_1_2$Outcome - rf_pred_1_3))
+mae_rf_1_4 <- mean(abs(cervical_te_1_2$Outcome - rf_pred_1_4))
+mae_rf_1_5 <- mean(abs(cervical_te_1_2$Outcome - rf_pred_1_5))
+
+# Create a vector with MSE values
+mse_rf_values <- c(mse_rf_1_2, mse_rf_1_3, mse_rf_1_4, mse_rf_1_5)
+
+
+importance(rf_1_2)
+varImpPlot(rf_1_2)
+
+importance(rf_1_3)
+varImpPlot(rf_1_3)
+
+importance(rf_1_4)
+varImpPlot(rf_1_4)
+
+importance(rf_1_5)
+varImpPlot(rf_1_5)
+
+# Create a bar plot for MSE values
+barplot(mse_rf_values, names.arg = datasets, xlab = "Datasets", ylab = "MSE", main = "Random Forest MSE for Each Dataset", col = "skyblue")
+
+```
+
+### Do the same for the SVM
+```{r}
+# Load the necessary library
+library(e1071)
+
+# Fit SVM models
+svm_1_2 <- svm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_2)
+svm_1_3 <- svm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_3)
+svm_1_4 <- svm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_4)
+svm_1_5 <- svm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_5)
+
+# Make predictions
+svm_pred_1_2 <- predict(svm_1_2, cervical_te_1_2)
+svm_pred_1_3 <- predict(svm_1_3, cervical_te_1_3)
+svm_pred_1_4 <- predict(svm_1_4, cervical_te_1_4)
+svm_pred_1_5 <- predict(svm_1_5, cervical_te_1_5)
+
+# Calculate MSE
+mse_svm_1_2 <- mean((cervical_te_1_2$Outcome - svm_pred_1_2)^2)
+mse_svm_1_3 <- mean((cervical_te_1_3$Outcome - svm_pred_1_3)^2)
+mse_svm_1_4 <- mean((cervical_te_1_4$Outcome - svm_pred_1_4)^2)
+mse_svm_1_5 <- mean((cervical_te_1_5$Outcome - svm_pred_1_5)^2)
+
+#MAE
+mae_svm_1_2 <- mean(abs(cervical_te_1_2$Outcome - svm_pred_1_2))
+mae_svm_1_3 <- mean(abs(cervical_te_1_2$Outcome - svm_pred_1_3))
+mae_svm_1_4 <- mean(abs(cervical_te_1_2$Outcome - svm_pred_1_4))
+mae_svm_1_5 <- mean(abs(cervical_te_1_2$Outcome - svm_pred_1_5))
+
+# Create a vector with MSE values
+mse_svm_values <- c(mse_svm_1_2, mse_svm_1_3, mse_svm_1_4, mse_svm_1_5)
+
+# Create a bar plot for MSE values
+barplot(mse_svm_values, names.arg = datasets, xlab = "Datasets", ylab = "MSE", main = "SVM MSE for Each Dataset", col = "skyblue")
+
+```
+### gbm
+```{r}
+# Load the necessary libraries
+library(gbm)
+library(caret)
+
+# Fit GBM models
+gbm_1_2 <- gbm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_2, distribution = "gaussian", n.trees = 5000, interaction.depth = 1, cv.folds = 5)
+gbm_1_3 <- gbm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_3, distribution = "gaussian", n.trees = 5000, interaction.depth = 1, cv.folds = 5)
+gbm_1_4 <- gbm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_4, distribution = "gaussian", n.trees = 5000, interaction.depth = 1, cv.folds = 5)
+gbm_1_5 <- gbm(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_5, distribution = "gaussian", n.trees = 5000, interaction.depth = 1, cv.folds = 5)
+
+best_n_tress_1_2 <- which.min(gbm_1_2$cv.error)
+summary(gbm_1_2$cv.error)
+
+best_n_tress_1_3 <- which.min(gbm_1_3$cv.error)
+summary(gbm_1_3$cv.error)
+
+best_n_tress_1_4 <- which.min(gbm_1_4$cv.error)
+summary(gbm_1_4$cv.error)
+
+best_n_tress_1_5 <- which.min(gbm_1_5$cv.error)
+summary(gbm_1_5$cv.error)
+
+```
+
+```{r}
+# Make predictions
+gbm_pred_1_2 <- predict(gbm_1_2, cervical_te_1_2, n.trees =best_n_tress_1_2)
+gbm_pred_1_3 <- predict(gbm_1_3, cervical_te_1_3, n.trees =best_n_tress_1_3)
+gbm_pred_1_4 <- predict(gbm_1_4, cervical_te_1_4, n.trees =best_n_tress_1_4)
+gbm_pred_1_5 <- predict(gbm_1_5, cervical_te_1_5, n.trees =best_n_tress_1_5)
+
+# Calculate MSE
+mse_gbm_1_2 <- mean((cervical_te_1_2$Outcome - gbm_pred_1_2)^2)
+mse_gbm_1_3 <- mean((cervical_te_1_3$Outcome - gbm_pred_1_3)^2)
+mse_gbm_1_4 <- mean((cervical_te_1_4$Outcome - gbm_pred_1_4)^2)
+mse_gbm_1_5 <- mean((cervical_te_1_5$Outcome - gbm_pred_1_5)^2)
+
+# MAE
+mae_gbm_1_2 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_2))
+mae_gbm_1_3 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_3))
+mae_gbm_1_4 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_4))
+mae_gbm_1_5 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_5))
+
+# Create a vector with MSE values
+mse_gbm_values <- c(mse_gbm_1_2, mse_gbm_1_3, mse_gbm_1_4, mse_gbm_1_5)
+
+# Create a bar plot for MSE values
+barplot(mse_gbm_values, names.arg = datasets, xlab = "Datasets", ylab = "MSE", main = "GBM MSE for Each Dataset", col = "skyblue")
+
+```
+### KNN
+```{r}
+library(caret)
+
+# Specify the range of k values
+k_range <- 1:20
+
+# Initialize a list to store MSE values for each dataset
+mse_values_list <- list()
+
+# Iterate over the datasets
+datasets1 <- list(cervical_tr_1_2, cervical_tr_1_3, cervical_tr_1_4, cervical_tr_1_5)
+test_datasets <- list(cervical_te_1_2, cervical_te_1_3, cervical_te_1_4, cervical_te_1_5)
+
+for (i in 1:4) {
+  # Initialize a vector to store MSE values for each k
+  mse_values <- numeric(length(k_range))
+  
+  # Iterate over the range of k values
+  for (k in k_range) {
+    # Fit the k-NN regression model
+    knnreg_model <- knnreg(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = datasets1[[i]], k)
+    
+    # Make predictions on the testing dataset
+    knnreg_pred <- predict(knnreg_model, test_datasets[[i]])
+    
+    # Calculate MSE for the current k value
+    mse_values[k] <- mean((test_datasets[[i]]$Outcome - knnreg_pred)^2)
+  }
+  mse_values_list[[i]] <- mse_values
+}
+
+# Find the optimal k value with the minimum MSE for each dataset
+optimal_k_values <- sapply(mse_values_list, which.min)
+
+# Visualize MSE values for each k and dataset
+par(mfrow = c(2, 2))
+for (i in 1:length(datasets1)) {
+  plot(k_range, mse_values_list[[i]], type = "b", xlab = "k Values", ylab = "MSE", main = paste("MSE for Different k Values in k-NN Regression (Dataset", i, ")"), col = "blue")
+  abline(v = optimal_k_values[i], col = "red", lty = 2)
+}
+
+```
+
+```{r}
+df1 <- data.frame(
+  
+  k_range = k_range,
+  mse_values = mse_values_list
+)
+
+# Print the data frame
+print(df1)
+```
+
+```{r}
+# Load the necessary libraries
+library(caret)
+
+# Fit knnreg models
+knnreg_model_1_2 <- knnreg(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_2,k=2)
+knnreg_model_1_3 <- knnreg(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_3,k=8)
+knnreg_model_1_4 <- knnreg(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_4,k=5)
+knnreg_model_1_5 <- knnreg(Outcome ~ Num.of.pregnancies + Smokes..years. + Smokes..packs.year. +Hormonal.Contraceptives..years. + IUD + STDs.condylomatosis +STDs.vaginal.condylomatosis + STDs.vulvo.perineal.condylomatosis +
+STDs.syphilis + STDs.genital.herpes + STDs.HIV + STDs.Hepatitis.B, data = cervical_tr_1_5,k=5)
+
+# Make predictions
+knnreg_pred_1_2 <- predict(knnreg_model_1_2, cervical_te_1_2)
+knnreg_pred_1_3 <- predict(knnreg_model_1_3, cervical_te_1_3)
+knnreg_pred_1_4 <- predict(knnreg_model_1_4, cervical_te_1_4)
+knnreg_pred_1_5 <- predict(knnreg_model_1_5, cervical_te_1_5)
+
+# Calculate MSE
+mse_knnreg_1_2 <- mean((cervical_te_1_2$Outcome - knnreg_pred_1_2)^2)
+mse_knnreg_1_3 <- mean((cervical_te_1_3$Outcome - knnreg_pred_1_3)^2)
+mse_knnreg_1_4 <- mean((cervical_te_1_4$Outcome - knnreg_pred_1_4)^2)
+mse_knnreg_1_5 <- mean((cervical_te_1_5$Outcome - knnreg_pred_1_5)^2)
+
+# MAE
+mae_gbm_1_2 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_2))
+mae_gbm_1_3 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_3))
+mae_gbm_1_4 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_4))
+mae_gbm_1_5 <- mean(abs(cervical_te_1_2$Outcome - gbm_pred_1_5))
+
+# Create a vector with MSE values
+mse_knnreg_values <- c(mse_knnreg_1_2, mse_knnreg_1_3, mse_knnreg_1_4, mse_knnreg_1_5)
+
+# Create a bar plot for MSE values
+barplot(mse_knnreg_values, names.arg = datasets, xlab = "Datasets", ylab = "MSE", main = "KNN Regression MSE for Each Dataset", col = "skyblue")
+
+```
+### MSE 
+```{r}
+# Create a line plot for MSE values of Linear Regression, Random Forest, and SVM
+# Prepare the data
+mse <- function(true, pred) {
+  return(mean((true - pred)^2))
+}
+mse_values <- matrix(nrow = 5, ncol = 4)
+mse_values[1,] <- c(mse(cervical_te_1_2$Outcome, linear_pred_1_2),
+                    mse(cervical_te_1_3$Outcome, linear_pred_1_3),
+                    mse(cervical_te_1_4$Outcome, linear_pred_1_4),
+                    mse(cervical_te_1_5$Outcome, linear_pred_1_5))
+
+mse_values[2,] <- c(mse(cervical_te_1_2$Outcome, rf_pred_1_2),
+                    mse(cervical_te_1_3$Outcome, rf_pred_1_3),
+                    mse(cervical_te_1_4$Outcome, rf_pred_1_4),
+                    mse(cervical_te_1_5$Outcome, rf_pred_1_5))
+mse_values[3,] <- c(mse(cervical_te_1_2$Outcome, knnreg_pred_1_2),
+                    mse(cervical_te_1_3$Outcome, knnreg_pred_1_3),
+                    mse(cervical_te_1_4$Outcome, knnreg_pred_1_4),
+                    mse(cervical_te_1_5$Outcome, knnreg_pred_1_5))
+mse_values[4,] <- c(mse(cervical_te_1_2$Outcome, svm_pred_1_2),
+                    mse(cervical_te_1_3$Outcome, svm_pred_1_3),
+                    mse(cervical_te_1_4$Outcome, svm_pred_1_4),
+                    mse(cervical_te_1_5$Outcome, svm_pred_1_5))
+mse_values[5,] <- c(mse(cervical_te_1_2$Outcome, gbm_pred_1_2),
+                    mse(cervical_te_1_3$Outcome, gbm_pred_1_3),
+                    mse(cervical_te_1_4$Outcome, gbm_pred_1_4),
+                    mse(cervical_te_1_5$Outcome, gbm_pred_1_5))
+
+datasets <- c("1:2", "1:3", "1:4", "1:5")
+```
+
+```{r}
+library(grid)
+# Create a line plot for MSE values of Linear Regression, Random Forest, and SVM
+plot(mse_values[1,], type = "o", xaxt = "n", xlab = "Datasets", ylab = "MSE", main = "MSE for Each Dataset", col = "blue", pch = 19, ylim = range(mse_values),lwd=5)
+lines(mse_values[2,], type = "o", col = "red", pch = 19,lwd=5)
+lines(mse_values[3,], type = "o", col = "darkgreen", pch = 19,lwd=5)
+lines(mse_values[4,], type = "o", col = "purple", pch = 19,lwd=5)
+lines(mse_values[5,], type = "o", col = "orange", pch = 19,lwd=5)
+
+# Add axis labels
+axis(1, at = 1:length(datasets), labels = datasets)
+
+# Add gridlines
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted", lwd = par("lwd"), equilogs = TRUE)
+
+# Add legend
+legend("topright", legend = c("Linear Regression", "Random Forest", "knn", "svm", "Gradient Boost Machine"), col = c("blue", "red", "darkgreen", "purple", "orange"), pch = 19, lty = 1, bty = "n")
+
+```
+### RMSE
+```{r}
+# Calculate RMSE values for each model and dataset
+rmse_values <- sqrt(mse_values)
+
+# Create a line plot for RMSE values of Linear Regression, Random Forest, and SVM
+plot(rmse_values[1,], type = "o", xaxt = "n", xlab = "Datasets", ylab = "RMSE", main = "RMSE for Each Dataset", col = "blue", pch = 19, ylim = range(mse_values),lwd=5)
+lines(rmse_values[2,], type = "o", col = "red", pch = 19,lwd=5)
+lines(rmse_values[3,], type = "o", col = "darkgreen", pch = 19,lwd=5)
+lines(rmse_values[4,], type = "o", col = "purple", pch = 19,lwd=5)
+lines(rmse_values[5,], type = "o", col = "orange", pch = 19,lwd=5)
+
+# Add axis labels
+axis(1, at = 1:length(datasets), labels = datasets)
+
+# Add gridlines
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted", lwd = par("lwd"), equilogs = TRUE)
+
+# Add legend
+legend("topright", legend = c("Linear Regression", "Random Forest", "knn", "svm", "Gradient Boost Machine"), col = c("blue", "red", "darkgreen", "purple", "orange"),pch = 19, lty = 1, bty = "n")
+
+
+```
+### MAE
+```{r}
+# Create a line plot for MSE values of Linear Regression, Random Forest, and SVM
+# Prepare the data
+mae <- function(true, pred) {
+  return(mean(abs(true - pred)))
+}
+mae_values <- matrix(nrow = 5, ncol = 4)
+mae_values[1,] <- c(mae(cervical_te_1_2$Outcome, linear_pred_1_2),
+                    mae(cervical_te_1_3$Outcome, linear_pred_1_3),
+                    mae(cervical_te_1_4$Outcome, linear_pred_1_4),
+                    mae(cervical_te_1_5$Outcome, linear_pred_1_5))
+
+mae_values[2,] <- c(mae(cervical_te_1_2$Outcome, rf_pred_1_2),
+                    mae(cervical_te_1_3$Outcome, rf_pred_1_3),
+                    mae(cervical_te_1_4$Outcome, rf_pred_1_4),
+                    mae(cervical_te_1_5$Outcome, rf_pred_1_5))
+mae_values[3,] <- c(mae(cervical_te_1_2$Outcome, knnreg_pred_1_2),
+                    mae(cervical_te_1_3$Outcome, knnreg_pred_1_3),
+                    mae(cervical_te_1_4$Outcome, knnreg_pred_1_4),
+                    mae(cervical_te_1_5$Outcome, knnreg_pred_1_5))
+mae_values[4,] <- c(mae(cervical_te_1_2$Outcome, svm_pred_1_2),
+                    mae(cervical_te_1_3$Outcome, svm_pred_1_3),
+                    mae(cervical_te_1_4$Outcome, svm_pred_1_4),
+                    mae(cervical_te_1_5$Outcome, svm_pred_1_5))
+mae_values[5,] <- c(mae(cervical_te_1_2$Outcome, gbm_pred_1_2),
+                    mae(cervical_te_1_3$Outcome, gbm_pred_1_3),
+                    mae(cervical_te_1_4$Outcome, gbm_pred_1_4),
+                    mae(cervical_te_1_5$Outcome, gbm_pred_1_5))
+
+datasets <- c("1:2", "1:3", "1:4", "1:5")
+```
+
+```{r}
+library(grid)
+# Create a line plot for MSE values of Linear Regression, Random Forest, and SVM
+plot(mae_values[1,], type = "o", xaxt = "n", xlab = "Datasets", ylab = "MAE", main = "MAE for Each Dataset", col = "blue", pch = 19, ylim = range(mae_values),lwd=5)
+lines(mae_values[2,], type = "o", col = "red", pch = 19,lwd=5)
+lines(mae_values[3,], type = "o", col = "darkgreen", pch = 19,lwd=5)
+lines(mae_values[4,], type = "o", col = "purple", pch = 19,lwd=5)
+lines(mae_values[5,], type = "o", col = "orange", pch = 19,lwd=5)
+
+# Add axis labels
+axis(1, at = 1:length(datasets), labels = datasets)
+
+# Add gridlines
+grid(nx = NULL, ny = NULL, col = "gray", lty = "dotted", lwd = par("lwd"), equilogs = TRUE)
+
+# Add legend
+legend("topright", legend = c("Linear Regression", "Random Forest", "knn", "svm", "Gradient Boost Machine"), col = c("blue", "red", "darkgreen", "purple", "orange"), pch = 19, lty = 1, bty = "n")
+
+```
+### table: MSE,RMSE,MAE
+```{r}
+# Create a data frame containing the accuracy values
+df <- data.frame(
+  Model = rep(c("Linear Regression", "Random Forest", "knn","svm","Gradient Boost Machine"), each = 4),
+  Dataset = rep(datasets, 5),
+  MSE = c(mse_values),
+  RMSE = c(rmse_values),
+  MAE = c(mae_values)
+)
+
+# Round the accuracy values to 3 decimal places
+df$MSE <- round(df$MSE, 3)
+df$RMSE <- round(df$RMSE, 3)
+df$MAE <- round(df$MAE, 3)
+# Print the data frame
+print(df)
+
+```
+### CV(coefficient of variation) to measure stability of downsampling
+```{r}
+# Add CV columns for each metric
+df$CV_MSE <- NA
+df$CV_RMSE <- NA
+df$CV_MAE <- NA
+
+# Calculate CV for each model
+unique_models <- unique(df$Model)
+for (model in unique_models) {
+  model_indices <- df$Model == model
+  df$CV_MSE[model_indices] <- sd(df$MSE[model_indices]) / mean(df$MSE[model_indices])
+  df$CV_RMSE[model_indices] <- sd(df$RMSE[model_indices]) / mean(df$RMSE[model_indices])
+  df$CV_MAE[model_indices] <- sd(df$MAE[model_indices]) / mean(df$MAE[model_indices])
+}
+
+# Round the CV values to 3 decimal places
+df$CV_MSE <- round(df$CV_MSE, 3)
+df$CV_RMSE <- round(df$CV_RMSE, 3)
+df$CV_MAE <- round(df$CV_MAE, 3)
+
+# Print the data frame
+print(df)
+
+```
+
+```{r}
+# Calculate accuracy
+accuracy <- function(true, pred) {
+  return(mean(true == round(pred))) # true value equals to the rounded predicted value
+}
+
+acc_values <- matrix(nrow = 5, ncol = 4)
+acc_values[1,] <- c(accuracy(cervical_te_1_2$Outcome, linear_pred_1_2),
+                    accuracy(cervical_te_1_3$Outcome, linear_pred_1_3),
+                    accuracy(cervical_te_1_4$Outcome, linear_pred_1_4),
+                    accuracy(cervical_te_1_5$Outcome, linear_pred_1_5))
+
+acc_values[2,] <- c(accuracy(cervical_te_1_2$Outcome, rf_pred_1_2),
+                    accuracy(cervical_te_1_3$Outcome, rf_pred_1_3),
+                    accuracy(cervical_te_1_4$Outcome, rf_pred_1_4),
+                    accuracy(cervical_te_1_5$Outcome, rf_pred_1_5))
+
+acc_values[3,] <- c(accuracy(cervical_te_1_2$Outcome, knnreg_pred_1_2),
+                    accuracy(cervical_te_1_3$Outcome, knnreg_pred_1_3),
+                    accuracy(cervical_te_1_4$Outcome, knnreg_pred_1_4),
+                    accuracy(cervical_te_1_5$Outcome, knnreg_pred_1_5))
+
+acc_values[4,] <- c(accuracy(cervical_te_1_2$Outcome, svm_pred_1_2),
+                    accuracy(cervical_te_1_3$Outcome, svm_pred_1_3),
+                    accuracy(cervical_te_1_4$Outcome, svm_pred_1_4),
+                    accuracy(cervical_te_1_5$Outcome, svm_pred_1_5))
+
+acc_values[5,] <- c(accuracy(cervical_te_1_2$Outcome, gbm_pred_1_2),
+                    accuracy(cervical_te_1_3$Outcome, gbm_pred_1_3),
+                    accuracy(cervical_te_1_4$Outcome, gbm_pred_1_4),
+                    accuracy(cervical_te_1_5$Outcome, gbm_pred_1_5))
+
+
+# Create a grouped bar plot for accuracy values
+barplot(acc_values, beside = TRUE, names.arg = datasets, xlab = "Datasets", ylab = "Accuracy", main = "Accuracy of Each Model", col = c("blue", "red", "green","purple","yellow"), legend.text = c("Linear Regression", "Random Forest", "knn","svm","Gradient Boost Machine"), args.legend = list(x = "topleft", bty = "n"))
+
+
+```
+### table: accuracy
+```{r}
+# Create a data frame containing the accuracy values
+accuracy_df <- data.frame(
+  Model = rep(c("Linear Regression", "Random Forest", "knn","svm","Gradient Boost Machine"), each = 4),
+  Dataset = rep(datasets, 5),
+  Accuracy = c(acc_values)
+)
+
+# Round the accuracy values to 3 decimal places
+accuracy_df$Accuracy <- round(accuracy_df$Accuracy, 3)
+
+# Print the data frame
+print(accuracy_df)
+```
