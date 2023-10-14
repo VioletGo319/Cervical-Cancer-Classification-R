@@ -1,12 +1,12 @@
-# README - Prediction of Cervical Cancer Risk using Machine Learning
+## README - Prediction of Cervical Cancer Risk using Machine Learning
 
-## Project Overview
+### Project Overview
 This project by the VioletGo group aims to develop a predictive model for cervical cancer likelihood using medical and sexual history variables.
 
-## Objective
+### Objective
 Predict cervical cancer risk based on a range of medical and sexual history variables such as age, sexual partners, and diagnostic test results.
 
-## Background
+### Background
 
 Cervical cancer remains a significant global health issue.
 In 2008, 275,000 deaths were attributed to cervical cancer, with 88% in developing countries.
@@ -19,7 +19,7 @@ Contains data from 858 patients.
 4 target variables indicating cervical intraepithelial neoplasia or cervical cancer presence.
 Approach
 
-## Data Preprocessing
+### Data Preprocessing
 
 Mean imputation for missing values in continuous variables.
 Random sampling for categorical variable imputation.
@@ -28,20 +28,20 @@ Risk score calculation based on four test results.
 Data split: 80% training and 20% testing.
 Exploratory Modeling
 
-## Used LASSO regression for feature selection.
+### Used LASSO regression for feature selection.
 Baseline models: Linear Regression, Random Forest, K-NN, SVM, GBM.
 Observed class imbalance which was addressed in the subsequent steps.
 Downsampling
 
-## Addressed class imbalance using downsampling.
+### Addressed class imbalance using downsampling.
 Sensitivity analysis to test downsampling robustness.
 Final Modeling
 
-## Evaluated downsampling's impact on feature selection.
+### Evaluated downsampling's impact on feature selection.
 Performance evaluation of the five models across various downsampling ratios.
 Evaluation
 
-## Metrics used: MSE, RMSE, MAE, CV_MSE, CV_RMSE, CV_MAE, and Accuracy.
+### Metrics used: MSE, RMSE, MAE, CV_MSE, CV_RMSE, CV_MAE, and Accuracy.
 GBM outperformed other models with the highest accuracy of 0.835 on a 1:4 case-control ratio dataset.
 SVM also showed promising results with an accuracy of 0.804 on the 1:3 case-control ratio dataset.
 Linear Regression was the least effective.
@@ -50,7 +50,7 @@ Sensitivity analysis confirmed stable performance across various case-control ra
 Conclusion
 The Gradient Boosting Machine model showed the best performance in predicting cervical cancer risk across different datasets. Future works might involve further model hyperparameter tuning, exploring additional feature engineering techniques, or exploring advanced machine learning algorithms.
 
-## Usage
+### Usage
 
 Install required libraries and dependencies.
 Download the dataset and place it in the specified directory.
