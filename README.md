@@ -1,67 +1,56 @@
-## README - Prediction of Cervical Cancer Risk using Machine Learning
-
-### Task: Classification
-### Topic: Diagnosis using Machine Learning
-### Language: R
-
+## Prediction of Cervical Cancer Risk using Machine Learning
+#### Task: Classification
+#### Topic: Diagnosis using Machine Learning
+#### Language: R
 ### Project Overview
-This project by the VioletGo group aims to develop a predictive model for cervical cancer likelihood using medical and sexual history variables.
+This project, developed by the VioletGo group, focuses on harnessing machine learning to create a predictive model for cervical cancer likelihood, grounded on variables related to medical and sexual history.
 
 ### Objective
-Predict cervical cancer risk based on a range of medical and sexual history variables such as age, sexual partners, and diagnostic test results.
+To predict the risk of cervical cancer using variables such as age, sexual partners, and diagnostic test outcomes.
 
 ### Background
-
-Cervical cancer remains a significant global health issue.
-In 2008, 275,000 deaths were attributed to cervical cancer, with 88% in developing countries.
-Persistent infection with high-risk HPV is a primary cause.
-Early detection is crucial, especially in resource-limited areas.
-Dataset
-
-Contains data from 858 patients.
-36 features, including demographic, medical history, and lifestyle factors.
-4 target variables indicating cervical intraepithelial neoplasia or cervical cancer presence.
-Approach
-
-### Data Preprocessing
-
-Mean imputation for missing values in continuous variables.
-Random sampling for categorical variable imputation.
-Feature standardization.
-Risk score calculation based on four test results.
-Data split: 80% training and 20% testing.
-Exploratory Modeling
-
-### Used LASSO regression for feature selection.
-Baseline models: Linear Regression, Random Forest, K-NN, SVM, GBM.
-Observed class imbalance which was addressed in the subsequent steps.
-Downsampling
-
-### Addressed class imbalance using downsampling.
-Sensitivity analysis to test downsampling robustness.
-Final Modeling
-
-### Evaluated downsampling's impact on feature selection.
-Performance evaluation of the five models across various downsampling ratios.
-Evaluation
-
-### Metrics used: MSE, RMSE, MAE, CV_MSE, CV_RMSE, CV_MAE, and Accuracy.
-GBM outperformed other models with the highest accuracy of 0.835 on a 1:4 case-control ratio dataset.
-SVM also showed promising results with an accuracy of 0.804 on the 1:3 case-control ratio dataset.
-Linear Regression was the least effective.
-Random Forest and KNN models showed moderate performance.
-Sensitivity analysis confirmed stable performance across various case-control ratios.
-Conclusion
-The Gradient Boosting Machine model showed the best performance in predicting cervical cancer risk across different datasets. Future works might involve further model hyperparameter tuning, exploring additional feature engineering techniques, or exploring advanced machine learning algorithms.
+Cervical cancer stands as a prominent global health concern.
+In 2008, it was responsible for 275,000 deaths, of which 88% occurred in developing countries1.
+A primary cause is persistent infections linked to high-risk HPV2.
+Emphasizing the critical nature of early detection, particularly in areas with limited resources.
+### Dataset
+Collated data from 858 patients.
+Features: 36 in total, encompassing demographic details, medical history, and lifestyle choices.
+Target Variables: 4 in total, signaling the presence of cervical intraepithelial neoplasia or cervical cancer.
+### Approach
+#### Data Preprocessing
+Imputed mean values for absent data in continuous variables.
+Adopted random sampling for imputation in categorical variables.
+Undertook feature standardization.
+Computed risk scores rooted in four test results.
+Divided data into: 80% training and 20% for testing.
+#### Exploratory Modeling
+Employed LASSO regression to select pivotal features.
+Established baseline models, including: Linear Regression, Random Forest, K-NN, SVM, and GBM.
+Detected a skewed class distribution, prompting corrective measures in subsequent phases.
+#### Downsampling
+Rectified class imbalances via downsampling.
+Conducted sensitivity analyses to verify the resilience of downsampling.
+#### Final Modeling
+Assessed the influence of downsampling on feature choices.
+Gauged the efficacy of the five models over diverse downsampling ratios.
+### Evaluation
+Adopted Metrics: MSE, RMSE, MAE, CV_MSE, CV_RMSE, CV_MAE, and Accuracy.
+Outstanding performance by GBM with an accuracy peak at 0.835, using a 1:4 case-control dataset.
+SVM followed closely, registering an accuracy of 0.804 for a 1:3 case-control dataset.
+Linear Regression lagged behind in efficacy.
+Random Forest and KNN displayed average outcomes.
+Sensitivity tests affirmed unwavering performance across different case-control datasets.
+### Conclusion
+The Gradient Boosting Machine (GBM) model emerged as the top performer in predicting cervical cancer risks, regardless of dataset variations. Potential future explorations could delve into fine-tuning model parameters, exploring innovative feature engineering methods, or testing advanced machine learning algorithms.
 
 ### Usage
+Install the necessary libraries and dependencies.
+Fetch the dataset and place it in the appropriate directory.
+Execute the preprocessing script for data refinement and setup.
+Run the model script for training and evaluation purposes.
+Utilize the refined model for predictions on fresh data.
+### References
+World Health Organization's Statistics on Cervical Cancer, 2008 
 
-Install required libraries and dependencies.
-Download the dataset and place it in the specified directory.
-Run the preprocessing script to clean and prepare the data.
-Execute the model script to train and evaluate the predictive model.
-Use the trained model to predict on new data.
-References
-[1] Statistics on Cervical Cancer, World Health Organization, 2008.
-[2] Role of HPV in Cervical Cancer, National Institute of Health, 2012.
-[3] Source of the dataset used in the project.
+Role of HPV in Cervical Cancer by National Institute of Health, 2012 
