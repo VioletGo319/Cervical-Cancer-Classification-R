@@ -1,8 +1,8 @@
 # Cervical-Cancer
-Project Title
-(Your Project Title Here)
+## Project Title
+Prediction of Cervical Cancer Risk
 
-Description
+## Description
 A brief description of the project. Mention what the classification task involves, what kind of data you are working with, and what you are hoping to achieve with this project.
 
 Example:
