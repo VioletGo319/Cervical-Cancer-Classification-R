@@ -1,6 +1,6 @@
 ## Prediction of Cervical Cancer Risk using Machine Learning
 #### Task: Classification
-#### Topic: Diagnosis using Machine Learning
+#### Topic: Machine Learning, Cervical Cancer Diagnosis
 #### Language: R
 ### Project Overview
 This project, developed by the VioletGo group, focuses on harnessing machine learning to create a predictive model for cervical cancer likelihood, grounded on variables related to medical and sexual history.
